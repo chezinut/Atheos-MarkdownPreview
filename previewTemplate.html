@@ -1,22 +1,28 @@
 <!--
-    Copyright (c) Codiad & Andr3as, distributed
-    as-is and without warranty under the MIT License. 
-    See http://opensource.org/licenses/MIT for more information. 
-    This information must remain intact.
--->
-<!doctype html>
+	Copyright (c) Codiad & Andr3as, distributed
+	as-is and without warranty under the MIT License. 
+	See http://opensource.org/licenses/MIT for more information. 
+	This information must remain intact.
+--><!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>__title__</title>
-    <link rel="stylesheet" href="markdown.css">
-    <script src="../../js/jquery-1.7.2.min.js"></script>
-    <script src="previewTemplate.js"></script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>__title__</title>
+	<link rel="stylesheet" href="markdown.css">
+	<style>
+		body { max-width: 800px; margin: 0 auto; padding: 20px; }
+		.header { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+		.header button { margin-right: 10px; padding: 5px 10px; cursor: pointer; }
+	</style>
 </head>
 <body>
-    <header>
-        Change layout: <button id="markdown">Markdown.css</button><button id="github">GitHub.css</button>
-    </header>
-__content__
+	<div class="header">
+		<strong>Preview:</strong> <span id="filename"></span>
+	</div>
+	__content__
+	<script>
+		document.getElementById('filename').textContent = document.title.replace(' - Preview', '');
+	</script>
 </body>
 </html>

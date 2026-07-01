@@ -1,5 +1,14 @@
-[{ "author" : "Andr3as",
-    "version": "0.6.2",
-    "name" : "MarkdownPreview",
-    "url" : "https://github.com/Andr3as/Codiad-MarkdownPreview"
-}]
+{
+	"author": ["Andr3as", "CheziNut"],
+	"name": "MarkdownPreview",
+	"description": "Preview and generate HTML from Markdown files",
+	"category": "Utility",
+	"status": "available",
+	"version": "1.0.0",
+	"config": [
+		{
+			"icon": "fas fa-eye",
+			"title": "MarkdownPreview"
+		}
+	]
+}

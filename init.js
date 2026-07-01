@@ -1,280 +1,245 @@
-/*
- * Copyright (c) Codiad & Andr3as, distributed
- * as-is and without warranty under the MIT License.
- * See http://opensource.org/licenses/MIT for more information.
- * This information must remain intact.
- */
+//////////////////////////////////////////////////////////////////////////////80
+// Atheos MarkdownPreview
+//////////////////////////////////////////////////////////////////////////////80
+// Copyright (c) 2026 CheziNut, distributed as-is and without warranty
+// under the MIT License. See [root]/docs/LICENSE.md for more.
+// This information must remain intact.
+//////////////////////////////////////////////////////////////////////////////80
+// Copyright (c) Codiad & Andr3as
+// Source: https://github.com/Andr3as/Codiad-MarkdownPreview
+//////////////////////////////////////////////////////////////////////////////80
 
-(function(global, $){
-    
-    var codiad = global.codiad,
-        scripts = document.getElementsByTagName('script'),
-        path = scripts[scripts.length-1].src.split('?')[0],
-        curpath = path.split('/').slice(0, -1).join('/')+'/',
-        self;
+(function() {
+	'use strict';
 
-    $(function() {
-        codiad.MarkdownPreview.init();
-    });
+	const self = {
 
-    codiad.MarkdownPreview = {
-        
-        path    : curpath,
-        callback: this.showResult,
-        default : "",
-        defObj  : {},
-        file    : "",
-        
-        init: function() {
-            var _this   = this;
-            self        = this;
-            //Context callbacks
-            amplify.subscribe("context-menu.onShow", function(obj){
-                var ext = _this.getExtension(obj.path);
-                if (ext == "md" || ext == "markdown") {
-                    $('#context-menu').append('<hr class="file-only markdown">');
-                    if (codiad.project.isAbsPath($('#file-manager a[data-type="root"]').attr('data-path'))) {
-                        $('#context-menu').append('<a class="file-only markdown" onclick="codiad.MarkdownPreview.showPreview($(\'#context-menu\').attr(\'data-path\'), true);"><span class="icon-eye"></span>Preview</a>');
-                    }
-                    $('#context-menu').append('<a class="file-only markdown" onclick="codiad.MarkdownPreview.generate($(\'#context-menu\').attr(\'data-path\'));"><span class="icon-code"></span>Generate html</a>');
-                }
-            });
-            amplify.subscribe("context-menu.onHide", function(){
-                $('.markdown').remove();
-            });
-            //Register preview callbacks
-            amplify.subscribe("helper.onPreview", function(path){
-                var ext = _this.getExtension(path);
-                if (ext == "md" || ext == "markdown") {
-                    _this.showPreview(path, false);
-                    return false;
-                }
-            });
+		path: (typeof atheos.path === 'string' ? atheos.path : '') + 'plugins/MarkdownPreview/',
+		cssText: null,
+		mdReady: false,
 
-            amplify.subscribe('helper.onStartLivePreview', function(path){
-                var ext = _this.getExtension(path);
-                if (ext == "md" || ext == "markdown") {
-                    _this.livePreview();
-                    //Weired workaround
-                    setTimeout(function(){
-                        _this.livePreview();
-                    },100);
-                    return false;
-                }
-            });
-            amplify.subscribe('helper.onChangeLivePreview', function(event){
-                var path    = codiad.active.getPath();
-                var ext     = _this.getExtension(path);
-                if (ext == "md" || ext == "markdown") {
-                    _this.livePreview();
-                    return false;
-                }
-            });
-            
-            amplify.subscribe('helper.onLivePreviewInit', function(){
-                codiad.LivePreviewHelper.registerExtension(["md", "markdown"]);
-            });
-            //Load helper and libs
-            if (typeof(codiad.PreviewHelper) == 'undefined') {
-                $.getScript(this.path+"previewHelper.js");
-            }
-            if (typeof(codiad.LivePreviewHelper) == 'undefined') {
-                $.getScript(this.path+"LivePreviewHelper.js", function(){
-                    codiad.LivePreviewHelper.init(_this.path);
-                });
-            }
-            $.getScript(this.path+"markdown.js");
-            //Load template
-            $.get(this.path+'livePreviewTemplate.html', function(template){
-                _this.livePreviewTemplate = template;
-            });
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Show dialog to choose paser method
-        //
-        //  Parameter:
-        //
-        //  path - {String} - File path
-        //    isAbsolutePath - {bool} - Has project an absolute path
-        //
-        //////////////////////////////////////////////////////////
-        showPreview: function(path, isAbsolutePath) {
-            var ext = this.getExtension(path);
-            if (ext == "md" || ext == "markdown") {
-                this.file = path;
-                if (this.default !== "") {
-                    this.parse(this.default, this.showResult, false);
-                } else {
-                    this.callback = this.showResult;
-                    codiad.modal.load(400, this.path+"dialog.php?chooseMethod&absolutePath=" + isAbsolutePath.toString());
-                }
-            } else {
-                codiad.filemanager.openInBrowser(path);
-            }
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Parse markdown file
-        //
-        //  Parameter:
-        //
-        //  method  - {String} - Method to parse file
-        //    callback - {Function} - Callback function
-        //  checkDefault - (Optional) - {Boolean} - Check if it should be sets  adefault
-        //
-        //////////////////////////////////////////////////////////
-        parse: function(method, callback, checkDefault) {
-            var _this = this;
-            if (typeof(callback) != 'function') {
-                callback = this.callback;
-            }
-            if (typeof(checkDefault) == 'undefined') {
-                if ($('#setDefault').attr("checked") == "checked") {
-                    this.default = method;
-                }
-            }
-            $.get(this.path+"controller.php?action=getContent&path="+this.file, function(content){
-                if (method == "github") {
-                    if (checkDefault !== false || typeof(checkDefault) == 'undefined') {
-                        if ($('#gfm').attr("checked") == "checked") {
-                            _this.defObj = {
-                                "text": content,
-                                "mode": "gfm",
-                                "context": $('#gfm_context').val()
-                            };
-                        } else {
-                            _this.defObj = {
-                                "text": content
-                            };
-                        }
-                    } else {
-                        _this.defObj.text = content;
-                    }
-                    $.post("https://api.github.com/markdown", JSON.stringify(_this.defObj),function(text){
-                        try {
-                            var result = $.parseJSON(text);
-                            codiad.message.warning(result.message);
-                            _this.parse("js", callback);
-                        } catch (e) {
-                            callback(text);
-                        }
-                    }).fail(function(){
-                        codiad.message.error("Github is unreachable!");
-                        _this.parse("js", callback);
-                    });
-                } else if (method == "js") {
-                    var text = markdown.toHTML(content, 'Maruku');
-                    callback(text);
-                } else {
-                    codiad.filemanager.openInBrowser(_this.file);
-                }
-                codiad.modal.unload();
-            });
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Show result in new window
-        //
-        //  Parameter:
-        //
-        //  content - {String} - Parsed content of the file
-        //
-        //////////////////////////////////////////////////////////
-        showResult: function(content) {
-            $.post(self.path+"controller.php?action=savePreview&file="+self.file, {"content": content}, function(){
-                window.open(self.path+"preview.html",'_newtab');
-            });
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Generate html of markdown
-        //
-        //  Parameter:
-        //
-        //  path - {String} - Path of file
-        //
-        //////////////////////////////////////////////////////////
-        generate: function(path) {
-            var ext = this.getExtension(path);
-            if (ext == "md" || ext == "markdown") {
-                this.file = path;
-                if (this.default !== "") {
-                    this.parse(this.default, this.saveResult, false);
-                } else {
-                    this.callback       = this.saveResult;
-                    var isAbsolutePath  = codiad.project.isAbsPath($('#file-manager a[data-type="root"]').attr('data-path'));
-                    codiad.modal.load(400, this.path+"dialog.php?chooseMethod&absolutePath  =" + isAbsolutePath.toString());
-                }
-            } else {
-                codiad.filemanager.openInBrowser(path);
-            }
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Save parsed result
-        //
-        //  Parameter:
-        //
-        //  content - {String} - Parsed content of the file
-        //
-        //////////////////////////////////////////////////////////
-        saveResult: function(content) {
-            $.post(self.path + "controller.php?action=saveContent&path=" + self.file, {"content": content}, function(result){
-                result = JSON.parse(result);
-                codiad.message[result.status](result.message);
-                if (result.status == "success") {
-                    codiad.filemanager.rescan(self.getDirname(self.file));
-                }
-            });
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Handle live preview
-        //
-        //////////////////////////////////////////////////////////
-        livePreview: function() {
-            var content = codiad.editor.getContent();
-            content     = markdown.toHTML(content, 'Maruku');
-            content     = this.livePreviewTemplate
-                                .replace('__content_', content)
-                                .replace('__title__', codiad.active.getPath())
-                                .replace('__PATH__', this.path);
-            codiad.LivePreviewHelper.updateContent(content);
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Get extension of file
-        //
-        //  Parameter:
-        //
-        //  path - {String} - File path
-        //
-        //////////////////////////////////////////////////////////
-        getExtension: function(path) {
-            return path.substring(path.lastIndexOf(".")+1);
-        },
-        
-        //////////////////////////////////////////////////////////
-        //
-        //  Get dirname of file
-        //
-        //  from php.js <phpjs.org>, licensed under the MIT licenses.
-        //
-        //  Parameter:
-        //
-        //  path - {String} - File path
-        //
-        //////////////////////////////////////////////////////////
-        getDirname: function(path) {
-            return path.replace(/\\/g, '/').replace(/\/[^\/]*\/?$/, '');
-        }
-    };
-})(this, jQuery);
+		init: function() {
+			self.loadMarkdownLib();
+			self.loadCSS();
+			self.bindContextMenu();
+			self.bindKeyboardShortcuts();
+		},
+
+		loadMarkdownLib: function() {
+			if (typeof window.markdown === 'undefined') {
+				atheos.common.loadScript(this.path + 'markdown.js', function() {
+					self.mdReady = true;
+				});
+			} else {
+				self.mdReady = true;
+			}
+		},
+
+		loadCSS: function() {
+			var xhr = new XMLHttpRequest();
+			xhr.open('GET', this.path + 'markdown.css', true);
+			xhr.onreadystatechange = function() {
+				if (xhr.readyState === 4 && xhr.status === 200) {
+					self.cssText = xhr.responseText;
+				}
+			};
+			xhr.send();
+		},
+
+		bindContextMenu: function() {
+			carbon.subscribe('contextmenu.showFileTreeMenu', function(active) {
+				if (!active || !active.path) return;
+				if (active.type === 'folder') return;
+
+				var ext = active.extension;
+				var isMd = ext === 'md' || ext === 'markdown';
+				var isHtml = ext === 'html' || ext === 'htm';
+				var isSvg = ext === 'svg';
+				if (!isMd && !isHtml && !isSvg) return;
+
+				self.cleanupContextMenu();
+
+				var menu = oX('#contextmenu');
+				menu.append('<hr class="preview-separator">');
+				menu.append('<a class="preview-item" action="atheos.MarkdownPreview.showPreview"><i class="fas fa-eye"></i> Preview</a>');
+				if (isMd) {
+					menu.append('<a class="preview-item" action="atheos.MarkdownPreview.generate"><i class="fas fa-file-code"></i> Generate HTML</a>');
+				}
+			});
+		},
+
+		cleanupContextMenu: function() {
+			var items = document.querySelectorAll('.preview-separator, .preview-item');
+			items.forEach(function(item) { item.remove(); });
+		},
+
+		bindKeyboardShortcuts: function() {
+			carbon.subscribe('active.focus', function(path) {
+				if (!path) return;
+				var ext = self.getExtension(path);
+				var isMd = ext === 'md' || ext === 'markdown';
+				var isHtml = ext === 'html' || ext === 'htm';
+				var isSvg = ext === 'svg';
+				if (!isMd && !isHtml && !isSvg) return;
+
+				var editor = atheos.inFocusEditor;
+				if (!editor || !editor.commands) return;
+
+				editor.commands.addCommand({
+					name: 'MarkdownPreview',
+					bindKey: { win: 'Ctrl-Shift-P', mac: 'Command-Shift-P' },
+					exec: function() {
+						self.showPreview(atheos.inFocusPath);
+					},
+					multiSelectAction: 'forEach',
+					readOnly: false
+				});
+			});
+		},
+
+		fetchContent: function(path, callback) {
+			echo({
+				url: atheos.controller,
+				data: {
+					target: 'MarkdownPreview',
+					action: 'getContent',
+					path: path
+				},
+				settled: function(reply, status) {
+					if (status === 200 && reply && reply.content) {
+						callback(reply.content);
+					} else {
+						atheos.toast.show('error', 'Failed to read file');
+					}
+				}
+			});
+		},
+
+		showPreview: function(active) {
+			try {
+				var path = active && active.path ? active.path : active;
+				if (!path) return;
+
+				var ext = self.getExtension(path);
+				var isMd = ext === 'md' || ext === 'markdown';
+				var isHtml = ext === 'html' || ext === 'htm';
+				var isSvg = ext === 'svg';
+				if (!isMd && !isHtml && !isSvg) return;
+
+				self.fetchContent(path, function(content) {
+					var previewHtml;
+					if (isMd) {
+						if (!self.mdReady || typeof window.markdown === 'undefined') {
+							atheos.toast.show('error', 'Markdown library not loaded. Please try again.');
+							return;
+						}
+						var rendered = markdown.toHTML(content, 'Maruku');
+						previewHtml = self.buildPreview(path, rendered);
+					} else {
+						previewHtml = content;
+					}
+
+					var blob = new Blob([previewHtml], { type: 'text/html;charset=utf-8' });
+					var url = URL.createObjectURL(blob);
+					var win = window.open(url, '_blank');
+					if (!win) {
+						URL.revokeObjectURL(url);
+						atheos.toast.show('error', 'Popup blocked. Please allow popups for this site.');
+						return;
+					}
+					setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+				});
+			} catch (e) {
+				console.error('MarkdownPreview error:', e);
+				atheos.toast.show('error', 'Preview failed: ' + e.message);
+			}
+		},
+
+		generate: function(active) {
+			try {
+				var path = active && active.path ? active.path : active;
+				if (!path) return;
+
+				var ext = self.getExtension(path);
+				if (ext !== 'md' && ext !== 'markdown') return;
+
+				if (!self.mdReady || typeof window.markdown === 'undefined') {
+					atheos.toast.show('error', 'Markdown library not loaded. Please try again.');
+					return;
+				}
+
+				self.fetchContent(path, function(content) {
+					var html = markdown.toHTML(content, 'Maruku');
+					var fullHtml = self.buildPreview(path, html);
+					var basePath = path.replace(/\\/g, '/').replace(/\/[^\/]*\/?$/, '');
+
+					echo({
+						url: atheos.controller,
+						data: {
+							target: 'MarkdownPreview',
+							action: 'saveContent',
+							path: path,
+							content: fullHtml
+						},
+						settled: function(reply, status) {
+							if (status === 200) {
+								atheos.toast.show('success', 'HTML generated successfully');
+								if (basePath) atheos.filetree.rescan(basePath);
+
+								// Open the generated HTML in a new tab
+								var blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+								var blobUrl = URL.createObjectURL(blob);
+								var win = window.open(blobUrl, '_blank');
+								if (win) {
+									setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 10000);
+								}
+					} else if (isSvg) {
+						previewHtml = '<!DOCTYPE html>\n<html><head><meta charset="UTF-8"><title>' +
+							self.escapeHTML(path.split('/').pop()) +
+							'</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5;}svg{max-width:95vw;max-height:95vh;}</style></head><body>' +
+							content + '</body></html>';
+					} else {
+								atheos.toast.show('error', 'Failed to generate HTML');
+							}
+						}
+					});
+				});
+			} catch (e) {
+				console.error('MarkdownPreview error:', e);
+				atheos.toast.show('error', 'Generate failed: ' + e.message);
+			}
+		},
+
+		buildPreview: function(path, renderedHtml) {
+			var title = path.split('/').pop();
+			var css = self.cssText || '';
+			return '<!DOCTYPE html>\n' +
+				'<html lang="en">\n' +
+				'<head>\n' +
+				'    <meta charset="UTF-8">\n' +
+				'    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+				'    <title>' + self.escapeHTML(title) + '</title>\n' +
+				'    <style>\n' + css + '\n    </style>\n' +
+				'    <style>body{max-width:50em;margin:10px auto;padding:1em;}</style>\n' +
+				'</head>\n' +
+				'<body>\n' + renderedHtml + '\n</body>\n' +
+				'</html>';
+		},
+
+		getExtension: function(path) {
+			if (!path) return '';
+			var dot = path.lastIndexOf('.');
+			return dot > -1 ? path.substring(dot + 1).toLowerCase() : '';
+		},
+
+		escapeHTML: function(text) {
+			var d = document.createElement('div');
+			d.textContent = text || '';
+			return d.innerHTML;
+		}
+	};
+
+	carbon.subscribe('system.loadExtra', () => self.init());
+	atheos.MarkdownPreview = self;
+
+})();
