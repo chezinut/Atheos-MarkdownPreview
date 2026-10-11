@@ -17,12 +17,19 @@
 		path: (typeof atheos.path === 'string' ? atheos.path : '') + 'plugins/MarkdownPreview/',
 		cssText: null,
 		mdReady: false,
+		liveStatus: false,
+		livePath: null,
+		liveFrame: null,
+		liveBoundSession: null,
+		liveChangeHandler: null,
+		livePreviewSelector: '#SBRIGHT a[onclick="atheos.MarkdownPreview.livePreview();"]',
 
 		init: function() {
 			self.loadMarkdownLib();
 			self.loadCSS();
 			self.bindContextMenu();
 			self.bindKeyboardShortcuts();
+			self.bindLivePreview();
 		},
 
 		loadMarkdownLib: function() {
@@ -236,6 +243,182 @@
 			var d = document.createElement('div');
 			d.textContent = text || '';
 			return d.innerHTML;
+		},
+
+		///////////////////////////////////////////////////////////////////
+		// Live Preview: a right sidebar toggle that splits the editor and
+		// renders the focused markdown file side by side, updating live.
+		// Ported from the Codiad & Andr3as MarkdownPreview plugin.
+		///////////////////////////////////////////////////////////////////
+		isMarkdown: function(path) {
+			if (!path) return false;
+			var ext = self.getExtension(path);
+			return ext === 'md' || ext === 'markdown';
+		},
+
+		liveTitle: function(path) {
+			return (path || '').split(/[\\/]/).pop();
+		},
+
+		bindLivePreview: function() {
+			self.hideRightbarItem();
+			carbon.subscribe('active.focus', function(path) {
+				self.onActiveFocus(path);
+			});
+			carbon.subscribe('active.close active.closeAll', function(path) {
+				self.onActiveClose(path);
+			});
+			self.onActiveFocus(atheos.inFocusPath);
+		},
+
+		onActiveFocus: function(path) {
+			if (self.isMarkdown(path)) {
+				self.showRightbarItem();
+			} else {
+				self.hideRightbarItem();
+			}
+			if (!self.liveStatus) return;
+			if (self.isMarkdown(path)) {
+				self.livePath = path;
+				self.rebindLiveChange();
+				self.renderLivePreview();
+			} else {
+				self.hideLivePreview();
+			}
+		},
+
+		onActiveClose: function(path) {
+			if (self.liveStatus && (!path || path === self.livePath)) {
+				self.hideLivePreview();
+			}
+			if (!self.isMarkdown(atheos.inFocusPath)) {
+				self.hideRightbarItem();
+			}
+		},
+
+		showRightbarItem: function() {
+			var item = document.querySelector(self.livePreviewSelector);
+			if (item) item.style.display = '';
+		},
+
+		hideRightbarItem: function() {
+			var item = document.querySelector(self.livePreviewSelector);
+			if (item) item.style.display = 'none';
+		},
+
+		livePreview: function(path) {
+			path = path || atheos.inFocusPath;
+			if (!self.isMarkdown(path)) return;
+			if (self.liveStatus) {
+				self.hideLivePreview();
+			} else {
+				self.showLivePreview(path);
+			}
+		},
+
+		showLivePreview: function(path) {
+			path = path || atheos.inFocusPath;
+			if (!self.isMarkdown(path)) return;
+			if (!self.mdReady || typeof window.markdown === 'undefined') {
+				atheos.toast.show('error', 'Markdown library not loaded. Please try again.');
+				return;
+			}
+
+			var editor = document.querySelector('#EDITOR');
+			if (!editor) return;
+
+			var existing = editor.querySelector('.md-preview');
+			if (existing) existing.remove();
+
+			var frame = document.createElement('iframe');
+			frame.className = 'md-preview-frame';
+			var panel = document.createElement('div');
+			panel.className = 'md-preview';
+			panel.appendChild(frame);
+			editor.appendChild(panel);
+
+			self.liveFrame = frame;
+			self.livePath = path;
+			self.liveStatus = true;
+
+			self.rebindLiveChange();
+			self.renderLivePreview();
+		},
+
+		hideLivePreview: function() {
+			self.unbindLiveChange();
+			var panel = document.querySelector('#EDITOR > .md-preview');
+			if (panel) panel.remove();
+			self.liveFrame = null;
+			self.livePath = null;
+			self.liveStatus = false;
+		},
+
+		rebindLiveChange: function() {
+			self.unbindLiveChange();
+			var editor = atheos.inFocusEditor;
+			if (!editor) return;
+			var session = editor.getSession();
+			if (!session) return;
+			self.liveBoundSession = session;
+			self.liveChangeHandler = function() {
+				self.renderLivePreview();
+			};
+			session.on('change', self.liveChangeHandler);
+		},
+
+		unbindLiveChange: function() {
+			if (self.liveBoundSession && self.liveChangeHandler) {
+				self.liveBoundSession.off('change', self.liveChangeHandler);
+			}
+			self.liveBoundSession = null;
+			self.liveChangeHandler = null;
+		},
+
+		renderLivePreview: function() {
+			if (!self.liveStatus || !self.liveFrame) return;
+			var editor = atheos.inFocusEditor;
+			if (!editor || !self.isMarkdown(self.livePath)) return;
+			var rendered = markdown.toHTML(editor.getValue(), 'Maruku');
+			self.updateLiveBody(self.livePath, rendered);
+		},
+
+		updateLiveBody: function(path, bodyHtml) {
+			var frame = self.liveFrame;
+			if (!frame) return;
+
+			var win = null,
+				doc = null;
+			try {
+				win = frame.contentWindow;
+				doc = frame.contentDocument || (win && win.document);
+			} catch (e) {
+				doc = null;
+			}
+
+			// If the frame already holds a fully rendered document, only patch
+			// the body so the scroll position survives every keystroke.
+			var rendered = frame.hasAttribute('srcdoc') && doc && win &&
+				doc.readyState === 'complete' && doc.body && doc.head &&
+				doc.head.querySelector('style, link[rel="stylesheet"]');
+			if (rendered) {
+				var sx = win.pageXOffset || 0,
+					sy = win.pageYOffset || 0;
+				doc.title = self.liveTitle(path);
+				doc.body.innerHTML = bodyHtml;
+				win.scrollTo(sx, sy);
+				return;
+			}
+
+			var full = self.buildPreview(path, bodyHtml);
+			if ('srcdoc' in frame) {
+				frame.srcdoc = full;
+			} else {
+				doc = frame.contentWindow.document;
+				doc.open();
+				doc.write(full);
+				doc.close();
+			}
 		}
 	};
 

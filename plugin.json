@@ -5,6 +5,13 @@
 	"category": "Utility",
 	"status": "available",
 	"version": "1.0.0",
+	"rightbar": [
+		{
+			"action": "atheos.MarkdownPreview.livePreview();",
+			"icon": "fas fa-eye",
+			"title": "Live Preview"
+		}
+	],
 	"config": [
 		{
 			"icon": "fas fa-eye",
