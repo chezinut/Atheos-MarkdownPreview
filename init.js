@@ -101,6 +101,18 @@
 					multiSelectAction: 'forEach',
 					readOnly: false
 				});
+
+				if (isMd) {
+					editor.commands.addCommand({
+						name: 'OpenLivePreview',
+						bindKey: { win: 'Ctrl-Shift-O', mac: 'Command-Shift-O' },
+						exec: function() {
+							self.livePreview(atheos.inFocusPath);
+						},
+						multiSelectAction: 'forEach',
+						readOnly: false
+					});
+				}
 			});
 		},
 
