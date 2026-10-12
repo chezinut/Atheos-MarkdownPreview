@@ -4,7 +4,7 @@
 	"description": "Preview and generate HTML from Markdown files",
 	"category": "Utility",
 	"status": "available",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"rightbar": [
 		{
 			"action": "atheos.MarkdownPreview.livePreview();",
