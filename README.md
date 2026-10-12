@@ -1,4 +1,5 @@
-# MarkdownPreview
+# MarkdownPreview for [Atheos](https://github.com/Atheos/Atheos/)
+based on [chezinut/Codiad-MarkdownPreview](https://github.com/chezinut/Codiad-MarkdownPreview) fork of [Andr3as/Codiad-MarkdownPreview](https://github.com/Andr3as/Codiad-MarkdownPreview)
 
 Display a preview of markdown files directly through the filemanager or generate html file out of markdown files.
 
